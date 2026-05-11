@@ -403,6 +403,34 @@ def resolve_skill_command_key(command: str) -> Optional[str]:
     return cmd_key if cmd_key in get_skill_commands() else None
 
 
+def resolve_skill_model(cmd_key: str) -> Optional[str]:
+    """Return the resolved model for a skill command, or None to use session default.
+
+    Reads SKILL.md frontmatter from the skill's directory and delegates to
+    ``get_skill_model``, which respects the resolution order:
+    operator config > frontmatter preferred_model > system tier defaults.
+    """
+    from agent.skill_utils import get_skill_model, parse_frontmatter
+
+    skill_info = _skill_commands.get(cmd_key)
+    if not skill_info:
+        return None
+
+    skill_dir = Path(skill_info["skill_dir"])
+    skill_name = str(skill_info["name"])
+
+    frontmatter: Dict[str, Any] = {}
+    skill_md = skill_dir / "SKILL.md"
+    if skill_md.exists():
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+            frontmatter, _ = parse_frontmatter(content)
+        except Exception:
+            pass
+
+    return get_skill_model(skill_name, frontmatter)
+
+
 def build_skill_invocation_message(
     cmd_key: str,
     user_instruction: str = "",

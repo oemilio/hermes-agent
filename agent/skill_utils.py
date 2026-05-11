@@ -168,6 +168,78 @@ def _normalize_string_set(values) -> Set[str]:
     return {str(v).strip() for v in values if str(v).strip()}
 
 
+# ── Per-skill model configuration ────────────────────────────────────────
+
+_SKILL_MODEL_TIERS: Dict[str, str] = {
+    "fast":     "anthropic/claude-haiku-4-5",
+    "balanced": "anthropic/claude-sonnet-4-6",
+    "powerful": "anthropic/claude-opus-4-7",
+}
+
+
+def get_skill_model(
+    skill_name: str,
+    frontmatter: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Resolve the model to use for a given skill.
+
+    Resolution order (highest priority first):
+      1. ``skills.models.<skill_name>`` in config.yaml (operator override)
+      2. ``skills.tiers.<tier>`` in config.yaml (operator-defined tier)
+      3. ``_SKILL_MODEL_TIERS[tier]`` (system defaults: fast/balanced/powerful)
+      4. ``metadata.hermes.preferred_model`` in frontmatter (skill author default)
+      5. ``None`` — caller uses the active session model
+
+    A value containing ``/`` is treated as a direct model ID and returned
+    as-is without tier resolution.  Unknown tier names emit a warning and
+    return ``None``.
+    """
+    config_path = get_config_path()
+    config: Dict[str, Any] = {}
+    if config_path.exists():
+        try:
+            parsed = yaml_load(config_path.read_text(encoding="utf-8"))
+            if isinstance(parsed, dict):
+                config = parsed
+        except Exception:
+            pass
+
+    skills_cfg = config.get("skills") or {}
+    operator_tiers: Dict[str, str] = {}
+    if isinstance(skills_cfg.get("tiers"), dict):
+        operator_tiers = skills_cfg["tiers"]
+    operator_models: Dict[str, str] = {}
+    if isinstance(skills_cfg.get("models"), dict):
+        operator_models = skills_cfg["models"]
+
+    def _resolve_tier(tier: str) -> Optional[str]:
+        if "/" in tier:
+            return tier
+        model = operator_tiers.get(tier) or _SKILL_MODEL_TIERS.get(tier)
+        if model is None:
+            logger.warning(
+                "Skill tier %r not defined in skills.tiers or system defaults, "
+                "using session default",
+                tier,
+            )
+        return model
+
+    raw = operator_models.get(skill_name)
+    if raw is not None:
+        return _resolve_tier(str(raw))
+
+    if frontmatter:
+        metadata = frontmatter.get("metadata")
+        if isinstance(metadata, dict):
+            hermes = metadata.get("hermes") or {}
+            if isinstance(hermes, dict):
+                preferred = hermes.get("preferred_model")
+                if preferred:
+                    return _resolve_tier(str(preferred))
+
+    return None
+
+
 # ── External skills directories ──────────────────────────────────────────
 
 # (config_path_str, mtime_ns) -> resolved external dirs list.  Keyed by

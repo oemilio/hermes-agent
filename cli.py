@@ -2158,6 +2158,7 @@ from agent.skill_commands import (
     scan_skill_commands,
     build_skill_invocation_message,
     build_preloaded_skills_prompt,
+    resolve_skill_model,
 )
 
 _skill_commands = scan_skill_commands()
@@ -4002,6 +4003,12 @@ class HermesCLI:
                 tuple(runtime["args"]),
             ),
         }
+
+        skill_model = getattr(self, "_pending_skill_model_override", None)
+        if skill_model:
+            self._pending_skill_model_override = None
+            route["model"] = skill_model
+            route["signature"] = (skill_model,) + route["signature"][1:]
 
         service_tier = getattr(self, "service_tier", None)
         if not service_tier:
@@ -7597,6 +7604,9 @@ class HermesCLI:
                 )
                 if msg:
                     skill_name = _skill_commands[base_cmd]["name"]
+                    skill_model = resolve_skill_model(base_cmd)
+                    if skill_model:
+                        self._pending_skill_model_override = skill_model
                     print(f"\n⚡ Loading skill: {skill_name}")
                     if hasattr(self, '_pending_input'):
                         self._pending_input.put(msg)

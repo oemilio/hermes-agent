@@ -535,6 +535,34 @@ skills:
   #   - ~/.agents/skills
   #   - /home/shared/team-skills
 
+  # Per-skill model selection.
+  # Override which model handles each skill command. Keys are the slash-command
+  # name (without the leading /). Values are a tier name or a direct model ID.
+  #
+  # Tier names (built-in defaults):
+  #   fast      → anthropic/claude-haiku-4-5
+  #   balanced  → anthropic/claude-sonnet-4-6
+  #   powerful  → anthropic/claude-opus-4-7
+  #
+  # A value containing "/" is treated as a direct model ID and used as-is.
+  # Skills with no entry here fall back to the session model.
+  #
+  # models:
+  #   rai-session-start: fast           # quick session-management skill → lighter model
+  #   rai-bugfix-fix: powerful          # deep bug-fixing skill → strongest model
+  #   my-research-skill: balanced
+  #   heavy-analysis: anthropic/claude-opus-4-7   # direct model ID
+
+  # Operator-defined tier overrides.
+  # Redefine what "fast", "balanced", and "powerful" mean for your deployment.
+  # Useful when running on a different provider or cost envelope.
+  # Leave unset to use the built-in defaults above.
+  #
+  # tiers:
+  #   fast: openrouter/qwen/qwen3-30b-a3b:free
+  #   balanced: anthropic/claude-sonnet-4-6
+  #   powerful: anthropic/claude-opus-4-7
+
 # =============================================================================
 # Agent Behavior
 # =============================================================================

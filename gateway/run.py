@@ -1245,6 +1245,9 @@ class GatewayRunner:
         # Per-session model overrides from /model command.
         # Key: session_key, Value: dict with model/provider/api_key/base_url/api_mode
         self._session_model_overrides: Dict[str, Dict[str, str]] = {}
+        # Per-invocation skill model overrides — one-shot, consumed on the next turn.
+        # Key: session_key, Value: resolved model ID string
+        self._pending_skill_model_overrides: Dict[str, str] = {}
         # Per-session reasoning effort overrides from /reasoning.
         # Key: session_key, Value: parsed reasoning config dict.
         self._session_reasoning_overrides: Dict[str, Dict[str, Any]] = {}
@@ -6566,6 +6569,11 @@ class GatewayRunner:
                     )
                     if msg:
                         event.text = msg
+                        # Resolve per-skill model override (one-shot, consumed on first turn).
+                        from agent.skill_commands import resolve_skill_model as _resolve_skill_model
+                        _skill_model = _resolve_skill_model(cmd_key)
+                        if _skill_model:
+                            self._pending_skill_model_overrides[_quick_key] = _skill_model
                         # Fall through to normal message processing with skill content
                 else:
                     # Not an active skill — check if it's a known-but-disabled or
@@ -13424,7 +13432,15 @@ class GatewayRunner:
         config.yaml defaults so the switched model is actually used for
         subsequent messages.  Fields with ``None`` values are skipped so
         partial overrides don't clobber valid config defaults.
+
+        Per-skill model overrides (``_pending_skill_model_overrides``) are
+        consumed here one-shot — they apply only to the invocation turn and
+        take precedence over session overrides.
         """
+        skill_model = self._pending_skill_model_overrides.pop(session_key, None)
+        if skill_model:
+            return skill_model, runtime_kwargs
+
         override = self._session_model_overrides.get(session_key)
         if not override:
             return model, runtime_kwargs
